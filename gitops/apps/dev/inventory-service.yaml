@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-inventory-service
+  namespace: argocd
+spec:
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  
+  source:
+    repoURL: https://github.com/chrisjamaica91/k8s-fleet-management
+    targetRevision: main
+    path: kustomize/overlays/dev/inventory-service
+  
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

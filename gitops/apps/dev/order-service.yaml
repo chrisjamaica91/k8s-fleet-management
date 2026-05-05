@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-order-service
+  namespace: argocd
+spec:
+  # Where to deploy
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  
+  # Where to find the manifests
+  source:
+    repoURL: https://github.com/chrisjamaica91/k8s-fleet-management
+    targetRevision: main
+    path: kustomize/overlays/dev/order-service
+  
+  # Sync policy
+  project: default
+  syncPolicy:
+    automated:
+      prune: true        # Delete resources if removed from Git
+      selfHeal: true     # Revert manual changes
+    syncOptions:
+      - CreateNamespace=true
