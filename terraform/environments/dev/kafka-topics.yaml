@@ -1,0 +1,44 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: fleet-kafka
+spec:
+  partitions: 3
+  replicas: 2
+  config:
+    retention.ms: 604800000
+    segment.bytes: 1073741824
+    min.insync.replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: inventory-updates
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: fleet-kafka
+spec:
+  partitions: 3
+  replicas: 2
+  config:
+    retention.ms: 604800000
+    segment.bytes: 1073741824
+    min.insync.replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: notifications
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: fleet-kafka
+spec:
+  partitions: 3
+  replicas: 2
+  config:
+    retention.ms: 604800000
+    segment.bytes: 1073741824
+    min.insync.replicas: 1

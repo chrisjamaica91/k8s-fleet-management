@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app.kubernetes.io/name: order-service
+  app.kubernetes.io/component: backend
+  app.kubernetes.io/part-of: fleet-management
+
+images:
+  - name: order-service
+    newName: 737026300147.dkr.ecr.us-east-2.amazonaws.com/order-service
+    newTag: latest
