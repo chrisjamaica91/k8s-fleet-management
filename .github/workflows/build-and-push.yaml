@@ -1,0 +1,174 @@
+name: Build and Push Docker Images
+
+# When to run this workflow
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'          # Only run if service code changes
+      - '.github/workflows/build-and-push.yaml'
+
+# Environment variables used by all jobs
+env:
+  AWS_REGION: us-east-2
+  AWS_ACCOUNT_ID: 737026300147
+
+jobs:
+  # Job 1: Detect which services changed
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      order: ${{ steps.filter.outputs.order }}
+      inventory: ${{ steps.filter.outputs.inventory }}
+      notification: ${{ steps.filter.outputs.notification }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            order:
+              - 'services/order-service/**'
+            inventory:
+              - 'services/inventory-service/**'
+            notification:
+              - 'services/notification-service/**'
+
+  # Job 2: Build order-service
+  build-order-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.order == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write    # ← Add this to allow OIDC token generation
+      contents: write   # ← Required to write repo contents
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/my-github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd services/order-service
+          docker build -t $ECR_REGISTRY/order-service:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/order-service:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/order-service:$IMAGE_TAG $ECR_REGISTRY/order-service:latest
+          docker push $ECR_REGISTRY/order-service:latest
+      
+      - name: Update Kustomize image tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd kustomize/base/order-service
+          sed -i "s|newTag:.*|newTag: ${IMAGE_TAG}|" kustomization.yaml
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add kustomization.yaml
+          git commit -m "Update order-service image to ${IMAGE_TAG}"
+          git push
+
+  # Job 3: Build inventory-service
+  build-inventory-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.inventory == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write    # ← Add this to allow OIDC token generation
+      contents: write   # ← Required to write repo contents
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/my-github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd services/inventory-service
+          docker build -t $ECR_REGISTRY/inventory-service:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/inventory-service:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/inventory-service:$IMAGE_TAG $ECR_REGISTRY/inventory-service:latest
+          docker push $ECR_REGISTRY/inventory-service:latest
+      
+      - name: Update Kustomize image tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd kustomize/base/inventory-service
+          sed -i "s|newTag:.*|newTag: ${IMAGE_TAG}|" kustomization.yaml
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add kustomization.yaml
+          git commit -m "Update inventory-service image to ${IMAGE_TAG}"
+          git push
+
+  # Job 4: Build notification-service
+  build-notification-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.notification == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write    # ← Add this to allow OIDC token generation
+      contents: write   # ← Required to write repo contents
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/my-github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd services/notification-service
+          docker build -t $ECR_REGISTRY/notification-service:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/notification-service:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/notification-service:$IMAGE_TAG $ECR_REGISTRY/notification-service:latest
+          docker push $ECR_REGISTRY/notification-service:latest
+      
+      - name: Update Kustomize image tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd kustomize/base/notification-service
+          sed -i "s|newTag:.*|newTag: ${IMAGE_TAG}|" kustomization.yaml
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add kustomization.yaml
+          git commit -m "Update notification-service image to ${IMAGE_TAG}"
+          git push

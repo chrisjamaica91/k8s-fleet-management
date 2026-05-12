@@ -102,3 +102,7 @@ module "eks_cluster" {
   # EKS cluster depends on VPC being created first
   depends_on = [module.vpc]
 }
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+}
