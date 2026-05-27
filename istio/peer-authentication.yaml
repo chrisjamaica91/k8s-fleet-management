@@ -1,0 +1,27 @@
+# PeerAuthentication: Configures mTLS requirements
+# "Peer" = another service trying to talk to your service
+#
+# This is different from RequestAuthentication (JWT):
+# - RequestAuthentication = User authentication (users with JWTs)
+# - PeerAuthentication = Service authentication (services with certificates)
+
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: default  # Apply to all services in default namespace
+spec:
+  mtls:
+    mode: STRICT  # Only accept mTLS connections
+
+---
+# Also enable mTLS for istio-system namespace
+# This ensures the gateway uses mTLS when talking to services
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT

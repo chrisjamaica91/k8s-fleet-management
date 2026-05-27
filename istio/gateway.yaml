@@ -1,0 +1,61 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: fleet-gateway
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway    # Use Istio's ingress gateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"                    # Accept traffic from any host
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: fleet-routes
+  namespace: default
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - fleet-gateway
+  http:
+  # Route /orders/* to order-service
+  - match:
+    - uri:
+        prefix: "/orders/"
+    rewrite:
+      uri: "/"
+
+    route:
+    - destination:
+        host: dev-order-service
+        port:
+          number: 80
+  # Route /inventory/* to inventory-service
+  - match:
+    - uri:
+        prefix: "/inventory/"
+    rewrite:
+      uri: "/"
+    route:
+    - destination:
+        host: dev-inventory-service
+        port:
+          number: 80
+  # Route /notifications/* to notification-service
+  - match:
+    - uri:
+        prefix: "/notifications/"
+    rewrite:
+      uri: "/"
+    route:
+    - destination:
+        host: dev-notification-service
+        port:
+          number: 80

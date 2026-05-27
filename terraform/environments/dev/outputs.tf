@@ -61,3 +61,8 @@ output "github_actions_role_arn" {
   value       = module.github_oidc.role_arn
   description = "ARN for GitHub Actions to assume"
 }
+
+output "aws_lb_controller_role_arn" {
+  value       = module.aws_lb_controller.role_arn
+  description = "ARN for AWS Load Balancer Controller to assume"
+}

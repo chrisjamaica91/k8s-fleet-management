@@ -47,7 +47,7 @@ resource "aws_subnet" "public" {
     {
       Name                                        = "${var.vpc_name}-public-${var.azs[count.index]}"
       "kubernetes.io/role/elb"                    = "1"  # Tell Kubernetes: load balancers can use this
-      "kubernetes.io/cluster/${var.vpc_name}-eks" = "shared"
+      "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     },
     var.tags
   )
@@ -64,7 +64,7 @@ resource "aws_subnet" "private" {
     {
       Name                                        = "${var.vpc_name}-private-${var.azs[count.index]}"
       "kubernetes.io/role/internal-elb"           = "1"  # Tell Kubernetes: internal load balancers only
-      "kubernetes.io/cluster/${var.vpc_name}-eks" = "shared"
+      "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     },
     var.tags
   )

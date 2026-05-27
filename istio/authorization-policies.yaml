@@ -1,0 +1,112 @@
+# Policy 1: DENY requests without JWT (except health checks)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  
+  action: DENY  # Block these requests
+  rules:
+  - from:
+    - source:
+        notRequestPrincipals: ["*"]  # NO principal = unauthenticated
+    to:
+    - operation:
+        notPaths:  # Except these paths (health checks must work without auth)
+        - "/orders/health"
+        - "/inventory/health"
+        - "/notifications/health"
+---
+# Policy 2: Allow authenticated users (baseline access)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: authenticated-users
+  namespace: istio-system  # Apply to services in istio-system namespace
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway  # ← Added selector
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["*"]  # Any authenticated user
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT"]  # Normal CRUD operations
+        notPaths:
+        - "*/admin/*"  # Except admin endpoints
+
+---
+# Policy 3: Admin-only operations
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: admin-only
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["*"]  # Authenticated users (must have JWT)
+    when:
+    - key: request.auth.claims[realm_access][roles]
+      # Read the JWT claim: payload.realm_access.roles (array)
+      values: ["fleet-admin"]  # Must contain "fleet-admin" role
+    to:
+    - operation:
+        paths:
+        - "*/admin/*"  # Admin paths
+        methods: ["GET", "POST", "PUT", "DELETE"]  # Full CRUD including DELETE
+
+---
+# Policy 4: Viewer role (read-only)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: viewer-readonly
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        requestPrincipals: ["*"]  # Authenticated users (must have JWT)
+    when:
+    - key: request.auth.claims[realm_access][roles]
+      values: ["fleet-viewer"]
+    to:
+    - operation:
+        methods: ["GET"]  # Only GET requests
+
+---
+# Policy 5: Allow unauthenticated access to health endpoints
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-health-checks
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  action: ALLOW
+  rules:
+  - to:
+    - operation:
+        paths:
+        - "/orders/health"
+        - "/inventory/health"
+        - "/notifications/health"

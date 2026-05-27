@@ -1,0 +1,29 @@
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: keycloak-jwt
+  namespace: istio-system  # Apply to istio-system (affects the gateway)
+spec:
+  # Which pods does this apply to?
+  # We target the istio-ingressgateway (the entry point for all external traffic)
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  
+  # JWT validation rules
+  jwtRules:
+  - issuer: "http://k8s-security-keycloak-e5b7586fae-68705e92a45425bc.elb.us-east-2.amazonaws.com/auth/realms/fleet-services"
+    # Issuer: Must match the "iss" claim in JWT (prevents token from wrong realm)
+    
+    jwksUri: "http://keycloak-http.security.svc.cluster.local/auth/realms/fleet-services/protocol/openid-connect/certs"
+    # JWKS endpoint: Where Istio fetches public keys
+    # Using internal service name (keycloak-http.security.svc.cluster.local) for faster access
+    
+    # Where to find the JWT in incoming requests
+    fromHeaders:
+    - name: Authorization       # HTTP header name
+      prefix: "Bearer "         # Token format: "Authorization: Bearer <token>"
+    
+    # Forward JWT payload to services as a header
+    # Your services can read claims without parsing/validating JWT themselves
+    outputPayloadToHeader: "x-jwt-payload"

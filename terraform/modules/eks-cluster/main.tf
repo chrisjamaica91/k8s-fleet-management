@@ -233,6 +233,17 @@ resource "aws_security_group_rule" "nodes_cluster_ingress" {
   source_security_group_id = aws_security_group.cluster.id
 }
 
+# Allow LoadBalancer services to reach NodePorts from the internet
+resource "aws_security_group_rule" "nodes_loadbalancer_ingress" {
+  description       = "Allow LoadBalancer traffic to NodePorts"
+  type              = "ingress"
+  from_port         = 30000
+  to_port           = 32767
+  protocol          = "tcp"
+  security_group_id = aws_security_group.nodes.id
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
 # -----------------------------------------------------------------------------
 # MANAGED NODE GROUP (The actual worker computers)
 # -----------------------------------------------------------------------------
@@ -281,7 +292,8 @@ resource "aws_eks_node_group" "main" {
   # Ensure node group updates don't interrupt workloads
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [scaling_config[0].desired_size]
+    # Commented out to allow Terraform to manage desired_size
+    # ignore_changes        = [scaling_config[0].desired_size]
   }
 }
 

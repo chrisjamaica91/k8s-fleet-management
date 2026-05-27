@@ -6,7 +6,7 @@ metadata:
     app: order-service
     version: v1.0.0
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: order-service
@@ -15,42 +15,57 @@ spec:
       labels:
         app: order-service
         version: v1.0.0
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "fleet-services"
+        vault.hashicorp.com/agent-inject-secret-kafka: "secret/data/kafka/credentials"
+        vault.hashicorp.com/agent-inject-template-kafka: |
+          {{- with secret "secret/data/kafka/credentials" -}}
+          export KAFKA_BROKERS="{{ .Data.data.bootstrap_servers }}"
+          export KAFKA_USERNAME="{{ .Data.data.username }}"
+          export KAFKA_PASSWORD="{{ .Data.data.password }}"
+          {{- end -}}
+        vault.hashicorp.com/agent-init-cpu: "50m"
+        vault.hashicorp.com/agent-init-mem: "32Mi"
+        vault.hashicorp.com/agent-cpu: "50m"
+        vault.hashicorp.com/agent-mem: "32Mi"
+        traffic.sidecar.istio.io/excludeOutboundPorts: "8200"
     spec:
       containers:
-      - name: order-service
-        image: order-service:latest  # This will be replaced by Kustomize
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8080
-          name: http
-          protocol: TCP
-        env:
-        - name: PORT
-          value: "8080"
-        - name: KAFKA_BROKERS
-          value: "fleet-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
-        - name: NODE_ENV
-          value: "production"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
+        - name: order-service
+          image: order-service:latest # This will be replaced by Kustomize
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: KAFKA_BROKERS
+              value: "fleet-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+            - name: NODE_ENV
+              value: "production"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3

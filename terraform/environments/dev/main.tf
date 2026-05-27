@@ -60,6 +60,7 @@ module "vpc" {
   source = "../../modules/vpc"
 
   vpc_name        = local.vpc_name
+  cluster_name    = local.cluster_name
   vpc_cidr        = var.vpc_cidr
   azs             = var.availability_zones
   private_subnets = local.private_subnets
@@ -105,4 +106,10 @@ module "eks_cluster" {
 
 module "github_oidc" {
   source = "../../modules/github-oidc"
+}
+
+module "aws_lb_controller" {
+  source = "../../modules/aws-lb-controller"
+
+  cluster_name = local.cluster_name
 }

@@ -10,7 +10,7 @@ namePrefix: dev-
 
 replicas:
   - name: order-service
-    count: 1  # Only 1 replica in dev (save resources)
+    count: 3  # Only 3 replicas in dev (save resources)
 
 patches:
   - patch: |-

@@ -1,0 +1,30 @@
+# DestinationRule: Configures how clients connect to services
+# "Destination" = the service you're calling
+#
+# This is the client-side configuration:
+# - PeerAuthentication = server says "require mTLS"
+# - DestinationRule = client says "use mTLS"
+
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: default-mtls
+  namespace: default
+spec:
+  host: "*.default.svc.cluster.local"  # Apply to all services in default namespace
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL  # Use Istio's automatic mTLS
+
+---
+# Also configure mTLS for istio-system services
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: default-mtls
+  namespace: istio-system
+spec:
+  host: "*.istio-system.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
