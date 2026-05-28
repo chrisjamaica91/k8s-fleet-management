@@ -10,7 +10,7 @@ namePrefix: dev-
 
 replicas:
   - name: order-service
-    count: 5  # Scaled up for testing GitOps workflow
+    count: 2  # Reduced for resource constraints (3 nodes)
 
 patches:
   - patch: |-
