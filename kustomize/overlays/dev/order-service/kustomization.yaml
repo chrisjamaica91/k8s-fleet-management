@@ -10,7 +10,7 @@ namePrefix: dev-
 
 replicas:
   - name: order-service
-    count: 3  # Only 3 replicas in dev (save resources)
+    count: 5  # Scaled up for testing GitOps workflow
 
 patches:
   - patch: |-
@@ -30,7 +30,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: LOG_LEVEL
-          value: "debug"
+          value: "info"  # Changed from debug for GitOps test
     target:
       kind: Deployment
       name: order-service
