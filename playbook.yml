@@ -1,0 +1,264 @@
+- name: Execute
+  hosts: "firewall"
+  gather_facts: no
+  connection: local
+  collections:
+    - popular.pop
+  
+  vars:
+    input_objects: []
+    matched_objects: []
+    unmatched_objects: []
+    combined_objects: []
+    service_user: "{{service_account}}"
+
+    provider:
+      ip_address: "{{ ip_address }}"
+      api_key: "{{ API_TOKEN }}"
+    
+    pop_device_groups:
+      - "dmz.c"
+      - "dz.est"
+      - "dmz.b"
+      - "dmz.a"
+      - "edge.hk"
+      - "edge.s"
+      - "sf.cloud"
+      - "sf.corp"
+      - "sf.est"
+
+  tasks:
+    # Git and file operations start
+    - name: Automation
+      block:
+        - name: Running kustomize
+          debug:
+            msg: "Running kustomize: ip {{ ip_address }} service account: {{ service_account }}"
+            
+        - name: Create temporary directory
+          file:
+            path: '{{ item }}'
+            state: directory
+            mode: '0755'
+          loop:
+            - './outputs'
+            - './input_vars'
+            - './overlap_report'
+        
+        - name: Search for input change file
+          find:
+            paths: "{{ CH_NUM | dirname}}"
+            patterns: "{{ CH_NUM | basename}}"
+            file_type: file
+          register: ch_file
+
+        - name: Is file found?
+          debug:
+            msg: "File found: {{ ch_file }}"
+
+        - name: Validate if file exists
+          slurp:
+            src: "{{ ch_file.files[0].path }}"
+          register: file_content
+          when: ch_file.matched > 0
+
+        - name: Decode JSON content and parse it
+          set_fact:
+            json_data: >-
+              {{ file_content.content | b64decode | from_json }}
+          when: file_content.matched > 0
+
+        - name: Normalize comma-seperated single-element lists to proper lists
+          set_fact:
+            data:
+              sn_number: "{{ json_data.sn_number }}"
+              account_id: "{{ json_data.account_id }}"
+              account_name: "{{ json_data.account_name }}"
+              env: >-
+                {%- set acct = (json_data.account_name | default('') | lower) -%}
+                {%- set ou = (json_data.ou_name | default('') | lower) -%}
+                {{
+                  'CDE' if 'cde' in acct
+                  else 'SVC' if ou is match('^infrastructure/(lab|dev|prod)$')
+                  else 'PRD' if ou == 'operate/prod'
+                }}
+
+              region: "{{ json_data.region[0].split(',') if json_data.region is defined and json_data.region|length > 0 else []}}"
+              vpc_id: "{{ json_data.vpc_id[0].split(',') if json_data.vpc_id is defined and json_data.vpc_id|length > 0 else []}}"
+              vpc_name: "{{ json_data.vpc_name[0].split(',') if json_data.vpc_name is defined and json_data.vpc_name|length > 0 else []}}"
+
+        - name: Printing the Content of the file
+          debug:
+            msg: "Parsed Data: {{ data }}"
+
+        - name: Write content of the file input_vars folder
+          copy:
+            dest: "./input_vars/input_vars.yml"
+            content: "{{ data | to_nice_yaml }}"
+
+        - name: Read Address Objects from File
+          include_vars:
+            file: "./input_vars/input_vars.yml"
+        
+        - name: Create create_address_object.yml from template
+          template:
+            src: "./templates/create_address_object.yml.j2"
+            dest: "./create_address_object.yml"
+        
+        - name: Read Address objects from file
+          include_vars:
+            file: "./input_vars/create_address_object.yml"
+            name: input_address_objects
+
+        - name: Reading all input address objects
+          set_fact:
+            input_objects: "{{ input_objects + [item.name]}}"
+    # Git and file operations end
+
+
+    # XPath Builder Start
+    - name: Init list
+      set_fact:
+        all_xpaths: []
+    
+    - name: Add tag xpaths
+      set_fact:
+        all_xpaths: "{{ all_xpaths + [item] }}"
+      loop: "{{ input_address_objects.tags }}"
+
+    - name: Add group xpaths
+      set_fact:
+        all_xpaths: "{{ all_xpaths + [item] }}"
+      loop: "{{ input_address_objects.groups }}"
+    
+    - debug:
+        msg: "All XPaths: {{ all_xpaths }}"
+
+    # XPath Builder End
+
+    # Object Operations 
+    - name: Tag Operations
+      include_tasks: "./tags/panos_tag.yml"
+
+    - name: Address Object Operations
+      include_tasks: "./address_objects/panos_address_objects.yml"
+
+    - name: combining matched and unmatched objects
+      set_fact:
+        combined_objects: "{{ matched_objects + unmatched_objects }}"
+
+    - name: Printing combined objects
+      debug:
+        msg: "Combined Objects: {{ combined_objects }}"
+    
+    - name: Printing combined objects
+      debug:
+        msg: "Combined Objects: {{ combined_objects }}"
+
+    # Operations End
+
+    # Overlap Logic Starts
+
+    - name: Load Address Object from file
+      slurp:
+        src: "{{ ch_file.files[0].path }}"
+      register: address_object_file_content
+
+    - name: set fact with parsed address objects as a list
+      set_fact:
+        existing_address_objects: "{{ address_object_file_content.content | b64decode | from_yaml }}"
+      when: address_object_file_content is defined
+
+    - name: find the overlap cidrs exists in Palo Alto
+      overlap_finder:
+        new_cidr: "{{ item.value }}"
+        existing_cidrs: "{{ existing_address_objects }}"
+      loop: "{{ input_address_objects.objects }}"
+      register: overlap_results
+      no_log: true
+
+    - name: Initialize detailed overlaps variable
+      set_fact:
+        detailed_overlaps: []
+
+    - name: Build detailed overlaps list
+      set_fact:
+        detailed_overlaps: "{{ detailed_overlaps + [ { 'new_object': item.item, 'overlaps': item.overlaps } ] }}"
+      loop: "{{ overlap_results.results }}"
+      no_log: true
+      when:
+        - overlap_results is defined
+        - overlap_results | length > 0
+
+    # Overlap Logic Ends
+    
+    # Uncommitted Logic starts
+    - name: Building the uncommitted changes
+      include_tasks: "./uncommitted/uncommitted_changes.yml"
+
+    # Uncommitted Logic ends
+
+    # Commit Logic starts
+    - name: Now moving to commit Operation
+      debug:
+        msg: "Performing Commit..."
+    
+    - name: Commit Handler
+      block:
+        - name: Start commit on Panorama (async)
+          panos_commit_panorama:
+            provider: "{{ provider }}"
+            admins: "{{ service_user }}"
+            sync: true
+            description: "Commit changes directly"
+          async: 3600
+          poll: 0
+          register: commit_job
+
+        - name: Wait for commit to finish
+          ansible.builtin.async_status:
+            jid: "{{ commit_job.ansible_job_id }}"
+          register: commit_status
+          until: commit_status.finished
+          retries: 60
+          delay: 60
+
+        - name: Fail if commit job failed
+          ansible.builtin.fail:
+            msg: "Commit failed: {{ commit_status }}"
+          when: commit_status.failed | default(false)
+        
+        - name: Show final commit status
+          ansible.builtin.debug:
+           var: commit_status
+
+    # Write the result into a file
+    #
+    # Write result code here, for example:
+    - name: Write combined objects to file
+      copy:
+        content: "{{ combined_objects | to_nice_yaml }}"
+        dest: "./outputs/combined_objects.yaml"
+        mode: '0644'
+    # write the results into a file end
+
+    # Push Logic starts
+    - name: Push changes to Git
+      debug:
+        msg: "Pushing changes to Git repository for service account: {{ service_user }}"
+    
+    - name: push hander
+      block:
+        - name: Push device group configs
+          vars:
+            url: "{{ ip_address }}"
+            api_key: " {{ api_key }}"
+
+    # Push Logic ends
+
+    # Debugging and reporting logic starts
+    # Debugging and reporting code here, for example:
+    - name: Print detailed overlaps
+      debug:
+        msg: "Detailed Overlaps: {{ detailed_overlaps }}"
+    # Debugging and reporting logic ends
